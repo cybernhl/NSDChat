@@ -1,12 +1,16 @@
 plugins {
-    alias(libs.plugins.android.application)
+    alias(libs.plugins.jetbrains.kotlin.android)
+    alias(libs.plugins.jetbrains.compose.compiler)
+    id "org.jetbrains.kotlin.plugin.serialization"
 }
+apply plugin: 'com.android.application'
 
 android {
     namespace 'com.example.android.nsdchat'
     compileSdk 35
     buildFeatures {
         viewBinding true
+        compose true
     }
     defaultConfig {
         applicationId "com.example.android.nsdchat"
@@ -24,9 +28,24 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_1_8.toString()
+    }
+
+    packagingOptions {
+        exclude 'META-INF/*'
+        exclude 'META-INF/INDEX.LIST'  // 排除重复的 INDEX.LIST 文件
+        exclude 'META-INF/*.kotlin_module'  // 排除重复的 Kotlin module 文件
+        exclude 'META-INF/LICENSE'  // 排除许可证文件
+        exclude 'META-INF/LICENSE.txt'  // 排除许可证文件
+        exclude 'META-INF/NOTICE'
+        exclude 'META-INF/io.netty.versions.properties'
     }
 }
 

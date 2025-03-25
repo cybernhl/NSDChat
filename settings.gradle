@@ -1,5 +1,6 @@
 pluginManagement {
     repositories {
+        gradlePluginPortal()
         google {
             content {
                 includeGroupByRegex("com\\.android.*")
@@ -8,14 +9,21 @@ pluginManagement {
             }
         }
         mavenCentral()
-        gradlePluginPortal()
+        maven { url "https://jitpack.io" }
+        maven { url "https://s3.amazonaws.com/repo.commonsware.com" }
+        maven { url "https://maven.pkg.jetbrains.space/public/p/compose/dev" }
+        maven { url "https://maven.pkg.jetbrains.space/public/p/ktor/eap" }
     }
 }
+
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
+        maven { url "https://jitpack.io" }
+        maven { url "https://s3.amazonaws.com/repo.commonsware.com" }
+        maven { url "https://maven.pkg.jetbrains.space/public/p/compose/dev" }
+        maven { url "https://maven.pkg.jetbrains.space/public/p/ktor/eap" }
     }
 }
 
