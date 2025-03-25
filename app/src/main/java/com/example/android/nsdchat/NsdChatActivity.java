@@ -11,25 +11,25 @@ import android.widget.EditText;
 import android.widget.TextView;
 
 import com.example.android.nsdchat.NsdHelper;
+import com.example.android.nsdchat.databinding.MainBinding;
 
 public class NsdChatActivity extends Activity {
-
+    private MainBinding binding;
     NsdHelper mNsdHelper;
-
-    private TextView mStatusView;
     private Handler mUpdateHandler;
-
     public static final String TAG = "NsdChat";
-
     ChatConnection mConnection;
 
-    /** Called when the activity is first created. */
+    /**
+     * Called when the activity is first created.
+     */
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Log.d(TAG, "Creating chat activity");
-        setContentView(R.layout.main);
-        mStatusView = (TextView) findViewById(R.id.status);
+        binding = MainBinding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
+
 
         mUpdateHandler = new Handler() {
             @Override
@@ -38,12 +38,11 @@ public class NsdChatActivity extends Activity {
                 addChatLine(chatLine);
             }
         };
-
     }
 
     public void clickAdvertise(View v) {
         // Register service
-        if(mConnection.getLocalPort() > -1) {
+        if (mConnection.getLocalPort() > -1) {
             mNsdHelper.registerService(mConnection.getLocalPort());
         } else {
             Log.d(TAG, "ServerSocket isn't bound.");
@@ -66,7 +65,7 @@ public class NsdChatActivity extends Activity {
     }
 
     public void clickSend(View v) {
-        EditText messageView = (EditText) this.findViewById(R.id.chatInput);
+        EditText messageView = binding.chatInput;
         if (messageView != null) {
             String messageString = messageView.getText().toString();
             if (!messageString.isEmpty()) {
@@ -77,7 +76,7 @@ public class NsdChatActivity extends Activity {
     }
 
     public void addChatLine(String line) {
-        mStatusView.append("\n" + line);
+        binding.status.append("\n" + line);
     }
 
     @Override
