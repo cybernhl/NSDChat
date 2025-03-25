@@ -32,7 +32,7 @@ sonner_version = "0.3.5"
 activity_compose = "1.10.1"
 android-compose-compiler = "1.5.14"#https://developer.android.com/jetpack/androidx/versions/stable-channel
 compose-android = "1.6.7"
-compose-bom = "2024.11.00"# Ref : https://developer.android.com/jetpack/compose/bom
+compose-bom = "2025.02.00"# Ref : https://developer.android.com/jetpack/compose/bom
 compose-version = "1.7.8"# Ref : https://www.jetbrains.com/help/kotlin-multiplatform-dev/compose-compatibility-and-versioning.html#kotlin-compatibility
 #endregion
 workManagerVersion = "2.10.0"

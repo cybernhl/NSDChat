@@ -13,176 +13,159 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.example.android.nsdchat
 
-package com.example.android.nsdchat;
+import android.content.Context
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdManager.DiscoveryListener
+import android.net.nsd.NsdManager.RegistrationListener
+import android.net.nsd.NsdServiceInfo
+import android.util.Log
 
-import android.content.Context;
-import android.net.nsd.NsdServiceInfo;
-import android.net.nsd.NsdManager;
-import android.util.Log;
+class NsdHelper(context: Context) {
+    var mContext: Context?
 
-public class NsdHelper {
+    var mNsdManager: NsdManager
+    var mResolveListener: NsdManager.ResolveListener? = null
+    var mDiscoveryListener: DiscoveryListener? = null
+    var mRegistrationListener: RegistrationListener? = null
 
-    Context mContext;
+    var mServiceName: String = "NsdChat"
 
-    NsdManager mNsdManager;
-    NsdManager.ResolveListener mResolveListener;
-    NsdManager.DiscoveryListener mDiscoveryListener;
-    NsdManager.RegistrationListener mRegistrationListener;
+    var chosenServiceInfo: NsdServiceInfo? = null
 
-    public static final String SERVICE_TYPE = "_http._tcp.";
-
-    public static final String TAG = "NsdHelper";
-    public String mServiceName = "NsdChat";
-
-    NsdServiceInfo mService;
-
-    public NsdHelper(Context context) {
-        mContext = context;
-        mNsdManager = (NsdManager) context.getSystemService(Context.NSD_SERVICE);
+    init {
+        mContext = context
+        mNsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
     }
 
-    public void initializeNsd() {
-        initializeResolveListener();
+    fun initializeNsd() {
+        initializeResolveListener()
 
         //mNsdManager.init(mContext.getMainLooper(), this);
-
     }
 
-    public void initializeDiscoveryListener() {
-        mDiscoveryListener = new NsdManager.DiscoveryListener() {
-
-            @Override
-            public void onDiscoveryStarted(String regType) {
-                Log.d(TAG, "Service discovery started");
+    fun initializeDiscoveryListener() {
+        mDiscoveryListener = object : DiscoveryListener {
+            override fun onDiscoveryStarted(regType: String?) {
+                Log.d(TAG, "Service discovery started")
             }
 
-            @Override
-            public void onServiceFound(NsdServiceInfo service) {
-                Log.d(TAG, "Service discovery success" + service);
-                if (!service.getServiceType().equals(SERVICE_TYPE)) {
-                    Log.d(TAG, "Unknown Service Type: " + service.getServiceType());
-                } else if (service.getServiceName().equals(mServiceName)) {
-                    Log.d(TAG, "Same machine: " + mServiceName);
-                } else if (service.getServiceName().contains(mServiceName)){
-                    mNsdManager.resolveService(service, mResolveListener);
+            override fun onServiceFound(service: NsdServiceInfo) {
+                Log.d(TAG, "Service discovery success" + service)
+                if (service.getServiceType() != SERVICE_TYPE) {
+                    Log.d(TAG, "Unknown Service Type: " + service.getServiceType())
+                } else if (service.getServiceName() == mServiceName) {
+                    Log.d(TAG, "Same machine: " + mServiceName)
+                } else if (service.getServiceName().contains(mServiceName)) {
+                    mNsdManager.resolveService(service, mResolveListener)
                 }
             }
 
-            @Override
-            public void onServiceLost(NsdServiceInfo service) {
-                Log.e(TAG, "service lost" + service);
-                if (mService == service) {
-                    mService = null;
+            override fun onServiceLost(service: NsdServiceInfo?) {
+                Log.e(TAG, "service lost" + service)
+                if (chosenServiceInfo == service) {
+                    chosenServiceInfo = null
                 }
             }
 
-            @Override
-            public void onDiscoveryStopped(String serviceType) {
-                Log.i(TAG, "Discovery stopped: " + serviceType);
+            override fun onDiscoveryStopped(serviceType: String?) {
+                Log.i(TAG, "Discovery stopped: " + serviceType)
             }
 
-            @Override
-            public void onStartDiscoveryFailed(String serviceType, int errorCode) {
-                Log.e(TAG, "Discovery failed: Error code:" + errorCode);
+            override fun onStartDiscoveryFailed(serviceType: String?, errorCode: Int) {
+                Log.e(TAG, "Discovery failed: Error code:" + errorCode)
             }
 
-            @Override
-            public void onStopDiscoveryFailed(String serviceType, int errorCode) {
-                Log.e(TAG, "Discovery failed: Error code:" + errorCode);
+            override fun onStopDiscoveryFailed(serviceType: String?, errorCode: Int) {
+                Log.e(TAG, "Discovery failed: Error code:" + errorCode)
             }
-        };
+        }
     }
 
-    public void initializeResolveListener() {
-        mResolveListener = new NsdManager.ResolveListener() {
-
-            @Override
-            public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
-                Log.e(TAG, "Resolve failed" + errorCode);
+    fun initializeResolveListener() {
+        mResolveListener = object : NsdManager.ResolveListener {
+            override fun onResolveFailed(serviceInfo: NsdServiceInfo?, errorCode: Int) {
+                Log.e(TAG, "Resolve failed" + errorCode)
             }
 
-            @Override
-            public void onServiceResolved(NsdServiceInfo serviceInfo) {
-                Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
+            override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
+                Log.e(TAG, "Resolve Succeeded. " + serviceInfo)
 
-                if (serviceInfo.getServiceName().equals(mServiceName)) {
-                    Log.d(TAG, "Same IP.");
-                    return;
+                if (serviceInfo.getServiceName() == mServiceName) {
+                    Log.d(TAG, "Same IP.")
+                    return
                 }
-                mService = serviceInfo;
+                chosenServiceInfo = serviceInfo
             }
-        };
+        }
     }
 
-    public void initializeRegistrationListener() {
-        mRegistrationListener = new NsdManager.RegistrationListener() {
-
-            @Override
-            public void onServiceRegistered(NsdServiceInfo NsdServiceInfo) {
-                mServiceName = NsdServiceInfo.getServiceName();
-                Log.d(TAG, "Service registered: " + mServiceName);
+    fun initializeRegistrationListener() {
+        mRegistrationListener = object : RegistrationListener {
+            override fun onServiceRegistered(NsdServiceInfo: NsdServiceInfo) {
+                mServiceName = NsdServiceInfo.getServiceName()
+                Log.d(TAG, "Service registered: " + mServiceName)
             }
 
-            @Override
-            public void onRegistrationFailed(NsdServiceInfo arg0, int arg1) {
-                Log.d(TAG, "Service registration failed: " + arg1);
+            override fun onRegistrationFailed(arg0: NsdServiceInfo?, arg1: Int) {
+                Log.d(TAG, "Service registration failed: " + arg1)
             }
 
-            @Override
-            public void onServiceUnregistered(NsdServiceInfo arg0) {
-                Log.d(TAG, "Service unregistered: " + arg0.getServiceName());
+            override fun onServiceUnregistered(arg0: NsdServiceInfo) {
+                Log.d(TAG, "Service unregistered: " + arg0.getServiceName())
             }
 
-            @Override
-            public void onUnregistrationFailed(NsdServiceInfo serviceInfo, int errorCode) {
-                Log.d(TAG, "Service unregistration failed: " + errorCode);
+            override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo?, errorCode: Int) {
+                Log.d(TAG, "Service unregistration failed: " + errorCode)
             }
-
-        };
+        }
     }
 
-    public void registerService(int port) {
-        tearDown();  // Cancel any previous registration request
-        initializeRegistrationListener();
-        NsdServiceInfo serviceInfo  = new NsdServiceInfo();
-        serviceInfo.setPort(port);
-        serviceInfo.setServiceName(mServiceName);
-        serviceInfo.setServiceType(SERVICE_TYPE);
+    fun registerService(port: Int) {
+        tearDown() // Cancel any previous registration request
+        initializeRegistrationListener()
+        val serviceInfo = NsdServiceInfo()
+        serviceInfo.setPort(port)
+        serviceInfo.setServiceName(mServiceName)
+        serviceInfo.setServiceType(SERVICE_TYPE)
 
         mNsdManager.registerService(
-                serviceInfo, NsdManager.PROTOCOL_DNS_SD, mRegistrationListener);
-
+            serviceInfo, NsdManager.PROTOCOL_DNS_SD, mRegistrationListener
+        )
     }
 
-    public void discoverServices() {
-        stopDiscovery();  // Cancel any existing discovery request
-        initializeDiscoveryListener();
+    fun discoverServices() {
+        stopDiscovery() // Cancel any existing discovery request
+        initializeDiscoveryListener()
         mNsdManager.discoverServices(
-                SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, mDiscoveryListener);
+            SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, mDiscoveryListener
+        )
     }
 
-    public void stopDiscovery() {
+    fun stopDiscovery() {
         if (mDiscoveryListener != null) {
             try {
-                mNsdManager.stopServiceDiscovery(mDiscoveryListener);
+                mNsdManager.stopServiceDiscovery(mDiscoveryListener)
             } finally {
             }
-            mDiscoveryListener = null;
+            mDiscoveryListener = null
         }
     }
 
-    public NsdServiceInfo getChosenServiceInfo() {
-        return mService;
-    }
-
-    public void tearDown() {
+    fun tearDown() {
         if (mRegistrationListener != null) {
             try {
-                mNsdManager.unregisterService(mRegistrationListener);
+                mNsdManager.unregisterService(mRegistrationListener)
             } finally {
             }
-            mRegistrationListener = null;
+            mRegistrationListener = null
         }
+    }
+
+    companion object {
+        const val SERVICE_TYPE: String = "_http._tcp."
+
+        const val TAG: String = "NsdHelper"
     }
 }
