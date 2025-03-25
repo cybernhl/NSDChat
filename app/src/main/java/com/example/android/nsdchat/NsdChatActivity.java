@@ -83,7 +83,14 @@ public class NsdChatActivity extends Activity {
     protected void onStart() {
         Log.d(TAG, "Starting.");
         mConnection = new ChatConnection(mUpdateHandler);
-
+//        mConnection.registerJavaListener(new  MessageListener() {
+//            @Override
+//            public void onNewMessage(String message) {
+//                runOnUiThread(() -> {
+//
+//                });
+//            }
+//        });
         mNsdHelper = new NsdHelper(this);
         mNsdHelper.initializeNsd();
         super.onStart();

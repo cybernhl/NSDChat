@@ -13,103 +13,175 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.example.android.nsdchat
 
-package com.example.android.nsdchat;
+import android.os.Handler
+import android.os.Looper
+import android.os.Message
+import android.util.Log
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.update
+import java.net.InetAddress
 
-import android.os.Bundle;
-import android.os.Handler;
-import android.os.Message;
-import android.util.Log;
+class ChatConnection @JvmOverloads constructor(private val handler: Handler? = null) {
+    private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        Log.e("ChatConnection", "Coroutine error", throwable)
+        mainHandler.post {
+            // 发送错误消息到 Handler
+            val msg = mainHandler.obtainMessage().apply {
+                data.putString("error", throwable.message)
+            }
+            mainHandler.sendMessage(msg)
+        }
+    }
+    private val coroutineScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO + exceptionHandler
+    )
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.net.InetAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.net.UnknownHostException;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
+    private val _messages = MutableStateFlow<List<String>>(emptyList())
+    val messages: StateFlow<List<String>> = _messages
 
-public class ChatConnection implements ServerCallback, ClientCallback {
-    private static final String TAG = "ChatConnection";
-    private Handler mUpdateHandler;
-    private ChatServer mChatServer;
-    private ChatClient mChatClient;
-    private Socket mSocket;
-    private int mPort = -1;
+    private val _connectionState = MutableStateFlow("Disconnected")
+    val connectionState: StateFlow<String> = _connectionState
 
-    public ChatConnection(Handler handler) {
-        mUpdateHandler = handler;
-        mChatServer = new ChatServer(this);
+    private val serverEvents = Channel<ServerEvent>()
+    private val clientEvents = Channel<ClientEvent>()
+    private var localPort = -1
+    fun getLocalPort() = localPort
+
+    fun setLocalPort(port: Int) {
+        localPort = port
     }
 
-    public void tearDown() {
-        mChatServer.tearDown();
-        if (mChatClient != null) {
-            mChatClient.tearDown();
+    private val mainHandler by lazy {
+        handler ?: Handler(Looper.getMainLooper()).also {
+            Log.d("ChatConnection", "Created default main handler")
         }
     }
 
-    public void connectToServer(InetAddress address, int port) {
-        mChatClient = new ChatClient(address, port, this);
-    }
+    private lateinit var chatServer: ChatServer
+    private lateinit var chatClient: ChatClient
 
-    public void sendMessage(String msg) {
-        if (mChatClient != null) {
-            mChatClient.sendMessage(msg);
-        }
-    }
-
-    public int getLocalPort() {
-        return mPort;
-    }
-
-    public void setLocalPort(int port) {
-        mPort = port;
-    }
-
-    @Override
-    public void onPortSet(int port) {
-        setLocalPort(port);
-    }
-
-    @Override
-    public void onClientConnected(InetAddress address, int port) {
-        if (mChatClient == null) {
-            connectToServer(address, port);
-        }
-    }
-
-    @Override
-    public synchronized void setSocket(Socket socket) {
-        Log.d(TAG, "setSocket called");
-        if (mSocket != null && mSocket.isConnected()) {
-            try {
-                mSocket.close();
-            } catch (IOException e) {
-                Log.e(TAG, "Error closing socket", e);
+    init {
+//        startEventProcessing()
+        coroutineScope.launch {
+            messages.collect { messages ->
+                sendViaHandler(messages.lastOrNull())
             }
         }
-        mSocket = socket;
     }
 
-    @Override
-    public Socket getSocket() {
-        return mSocket;
+    private fun sendViaHandler(message: String?) {
+        message?.let {
+            val msg = Message.obtain().apply {
+                data.putString("msg", it)
+            }
+            mainHandler.sendMessage(msg)
+        }
     }
 
-    @Override
-    public void updateMessages(String msg, boolean local) {
-        String prefix = local ? "me: " : "them: ";
-        msg = prefix + msg;
-        Bundle bundle = new Bundle();
-        bundle.putString("msg", msg);
-        Message message = new Message();
-        message.setData(bundle);
-        mUpdateHandler.sendMessage(message);
+    fun registerJavaListener(listener: MessageListener) {
+        coroutineScope.launch {
+            messages.collect { list ->
+                list.lastOrNull()?.let {
+                    listener.onNewMessage(it)
+                }
+            }
+        }
+    }
+
+    fun startServer() {
+        chatServer = ChatServer(object : ServerCallback {
+            override fun onPortSet(port: Int) {
+                coroutineScope.launch {
+                    serverEvents.send(ServerEvent.PortAssigned(port))
+                }
+            }
+
+            override fun onClientConnected(address: InetAddress, port: Int) {
+                coroutineScope.launch {
+                    serverEvents.send(ServerEvent.ClientConnected(address, port))
+                }
+            }
+        })
+    }
+
+    fun connectToServer(address: InetAddress, port: Int) {
+        chatClient = ChatClient(address, port, object : ClientCallback {
+            override fun onMessageReceived(message: String) {
+                coroutineScope.launch {
+                    clientEvents.send(ClientEvent.MessageReceived(message))
+                }
+            }
+
+            override fun onConnectionStateChanged(connected: Boolean) {
+                coroutineScope.launch {
+                    clientEvents.send(
+                        if (connected) ClientEvent.Connected
+                        else ClientEvent.Disconnected
+                    )
+                }
+            }
+        })
+    }
+
+    fun sendMessage(message: String) {
+        coroutineScope.launch {
+            chatClient?.sendMessage(message)
+            addMessage("me: $message")
+        }
+    }
+
+    fun tearDown() {
+        coroutineScope.cancel()
+        chatServer.tearDown()
+        chatClient.tearDown()
+    }
+
+    private fun startEventProcessing() {
+        coroutineScope.launch {
+            launch { processServerEvents() }
+            launch { processClientEvents() }
+        }
+    }
+
+    private suspend fun processServerEvents() {
+        serverEvents.consumeAsFlow().collect { event ->
+            when (event) {
+                is ServerEvent.PortAssigned -> handlePortAssigned(event.port)
+                is ServerEvent.ClientConnected -> handleClientConnected(event.address, event.port)
+            }
+        }
+    }
+
+    private suspend fun processClientEvents() {
+        clientEvents.consumeAsFlow().collect { event ->
+            when (event) {
+                is ClientEvent.MessageReceived -> addMessage("them: ${event.message}")
+                ClientEvent.Connected -> updateConnectionState("Connected")
+                ClientEvent.Disconnected -> updateConnectionState("Disconnected")
+            }
+        }
+    }
+
+    private fun handlePortAssigned(port: Int) {
+        Log.d("ChatConnection", "Server port assigned: $port")
+    }
+
+    private fun handleClientConnected(address: InetAddress, port: Int) {
+        Log.d("ChatConnection", "Client connected from $address:$port")
+        connectToServer(address, port)
+    }
+
+    private fun addMessage(message: String) {
+        _messages.update { it + message }
+    }
+
+    private fun updateConnectionState(state: String) {
+        _connectionState.value = state
     }
 }
